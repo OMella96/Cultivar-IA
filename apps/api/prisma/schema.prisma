@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// Organización / Tenant
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  cultivations Cultivation[]
+  equipment    Equipment[]
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  name           String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// Cultivos
+model Cultivation {
+  id             String       @id @default(uuid())
+  name           String
+  description    String?
+  startDate      DateTime     @default(now())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  plants         Plant[]
+  logs           CultivationLog[]
+  equipmentStacks EquipmentStack[]
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// Plantas
+model Plant {
+  id            String      @id @default(uuid())
+  name          String      // e.g. "Gorilla Glue #4 - A"
+  cultivationId String
+  cultivation   Cultivation @relation(fields: [cultivationId], references: [id])
+  strainId      String?
+  strain        Strain?     @relation(fields: [strainId], references: [id])
+  
+  stage         PlantStage  @default(SEEDLING)
+  germinatedAt  DateTime?
+  
+  logs          PlantLog[]
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+enum PlantStage {
+  SEEDLING
+  VEGETATIVE
+  FLOWERING
+  DRYING
+  CURING
+  HARVESTED
+}
+
+// Genética
+model Strain {
+  id          String   @id @default(uuid())
+  name        String
+  breeder     String?
+  type        String?  // Indica / Sativa / Hybrid
+  floweringDays Int?
+  
+  plants      Plant[]
+}
+
+// Eventos / Logs (Fuente de verdad)
+model PlantLog {
+  id        String    @id @default(uuid())
+  plantId   String
+  plant     Plant     @relation(fields: [plantId], references: [id])
+  
+  type      LogType
+  date      DateTime  @default(now())
+  
+  // Datos estructurados flexibles (JSONB)
+  // Ej: { ph: 6.5, ec: 1.2, nutrients: [{name: "CalMag", ml: 2}] }
+  data      Json?
+  
+  // Notas manuales
+  notes     String?
+  
+  // Referencias a imágenes (almacenadas en S3/MinIO)
+  imageIds  String[]
+  
+  // Embedding vectorial para búsqueda semántica (descripción + notas)
+  embedding Unsupported("vector(1536)")?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum LogType {
+  WATERING
+  FEEDING
+  OBSERVATION
+  PHOTO
+  ISSUE_PEST
+  ISSUE_DEFICIENCY
+  ENV_CHANGE
+  STAGE_CHANGE
+}
+
+model CultivationLog {
+  id            String      @id @default(uuid())
+  cultivationId String
+  cultivation   Cultivation @relation(fields: [cultivationId], references: [id])
+  
+  type          LogType
+  date          DateTime    @default(now())
+  data          Json?
+  notes         String?
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// Equipamiento
+model Equipment {
+  id             String       @id @default(uuid())
+  name           String
+  type           EquipmentType
+  specification  Json?        // Detalles técnicos
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  stacks         EquipmentStackItem[]
+}
+
+enum EquipmentType {
+  LIGHT
+  TENT
+  FAN
+  FILTER
+  HUMIDIFIER
+  DEHUMIDIFIER
+  POT
+  SUBSTRATE
+  SENSOR
+  OTHER
+}
+
+// Stacks de Equipamiento (Conjuntos reutilizables)
+model EquipmentStack {
+  id            String   @id @default(uuid())
+  name          String
+  cultivationId String?
+  cultivation   Cultivation? @relation(fields: [cultivationId], references: [id])
+  
+  items         EquipmentStackItem[]
+}
+
+model EquipmentStackItem {
+  id               String         @id @default(uuid())
+  stackId          String
+  stack            EquipmentStack @relation(fields: [stackId], references: [id])
+  equipmentId      String
+  equipment        Equipment      @relation(fields: [equipmentId], references: [id])
+  
+  // Configuración específica en este stack (ej: "Dimmer al 80%")
+  settings         Json?
+}
