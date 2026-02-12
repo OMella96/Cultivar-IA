@@ -1,0 +1,8 @@
+# Validadores de Infraestructura y Reglas
+/package.json @DevOps-Governor
+/nx.json @DevOps-Governor
+/.github/ @DevOps-Governor
+/docs/ @DevOps-Governor
+
+# Protección General
+* @omella
